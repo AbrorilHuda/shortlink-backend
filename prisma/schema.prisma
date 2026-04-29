@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+   url      = env("DATABASE_URL")
+}
+
+
+model Link {
+  id           Int   @id @default(autoincrement())
+  code         String   @unique
+  originalUrl  String
+  userId       Int?
+  createdAt    DateTime @default(now())
+  expiredAt    DateTime?
+  isActive     Boolean  @default(true)
+
+  stats        LinkStat?
+  clicks       ClickLog[]
+}
+
+
+model LinkStat {
+  linkId        Int   @id
+  totalClicks   Int      @default(0)
+  lastClickedAt DateTime?
+
+  link          Link     @relation(fields: [linkId], references: [id])
+}
+
+model ClickLog {
+  id         Int   @id @default(autoincrement())
+  linkId     Int
+  ipAddress  String?
+  userAgent  String?
+  country    String?
+  createdAt  DateTime @default(now())
+
+  link       Link     @relation(fields: [linkId], references: [id])
+}
