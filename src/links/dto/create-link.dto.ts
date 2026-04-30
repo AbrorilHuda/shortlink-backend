@@ -1,8 +1,13 @@
-import { IsUrl, IsOptional, IsDateString, IsString } from 'class-validator';
+import { IsUrl, IsOptional, IsDateString, IsString, Matches } from 'class-validator';
 
 export class CreateLinkDto {
   @IsUrl({}, { message: 'URL tidak valid' })
   url: string;
+
+  @IsOptional()
+  @IsString({ message: 'Code harus berupa string' })
+  @Matches(/^[a-zA-Z0-9-_]+$/, { message: 'Code hanya boleh berisi huruf, angka, strip, dan underscore' })
+  code?: string;
 
   @IsOptional()
   @IsString({ message: 'Title harus berupa string' })

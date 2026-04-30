@@ -4,12 +4,18 @@ import {
   IsDateString,
   IsBoolean,
   IsString,
+  Matches,
 } from 'class-validator';
 
 export class UpdateLinkDto {
   @IsOptional()
+  @IsString({ message: 'Code harus berupa string' })
+  @Matches(/^[a-zA-Z0-9-_]+$/, { message: 'Code hanya boleh berisi huruf, angka, strip, dan underscore' })
+  code?: string;
+
+  @IsOptional()
   @IsUrl({}, { message: 'URL tidak valid' })
-  originalUrl?: string;
+  url?: string;
 
   @IsOptional()
   @IsBoolean({ message: 'isActive harus berupa boolean' })

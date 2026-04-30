@@ -8,7 +8,6 @@ import {
   Delete,
   Res,
   Req,
-  ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
 import { LinksService } from './links.service';
@@ -42,7 +41,7 @@ export class LinksController {
   @UseGuards(JwtAuthGuard)
   @Get('links/:id')
   async findOne(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @GetUser() user: UserPayload,
   ) {
     const link = await this.linksService.findById(id, user.id);
@@ -52,7 +51,7 @@ export class LinksController {
   @UseGuards(JwtAuthGuard)
   @Patch('links/:id')
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() dto: UpdateLinkDto,
     @GetUser() user: UserPayload,
   ) {
@@ -63,11 +62,21 @@ export class LinksController {
   @UseGuards(JwtAuthGuard)
   @Delete('links/:id')
   async remove(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @GetUser() user: UserPayload,
   ) {
     await this.linksService.remove(id, user.id);
     return successResponse(null, 'Link berhasil dihapus');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('links/:id/stats')
+  async getStats(
+    @Param('id') id: string,
+    @GetUser() user: UserPayload,
+  ) {
+    const stats = await this.linksService.getLinkStats(id, user.id);
+    return successResponse(stats, 'Berhasil mengambil statistik link');
   }
 
   // Harus di bawah /links routes — public, tidak butuh auth

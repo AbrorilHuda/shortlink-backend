@@ -24,7 +24,7 @@ model User {
 }
 
 model Link {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(uuid())
   code         String   @unique
   originalUrl  String
   userId       Int?
@@ -39,9 +39,8 @@ model Link {
   clicks       ClickLog[]
 }
 
-
 model LinkStat {
-  linkId        Int   @id
+  linkId        String   @id
   totalClicks   Int      @default(0)
   lastClickedAt DateTime?
 
@@ -49,8 +48,8 @@ model LinkStat {
 }
 
 model ClickLog {
-  id         Int   @id @default(autoincrement())
-  linkId     Int
+  id         Int      @id @default(autoincrement())
+  linkId     String
   ipAddress  String?
   userAgent  String?
   country    String?

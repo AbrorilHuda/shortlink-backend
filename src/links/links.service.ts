@@ -14,12 +14,21 @@ import * as geoip from 'geoip-lite';
 export class LinksService {
   constructor(private prisma: PrismaService) {}
   async create(dto: CreateLinkDto, userId: number) {
-    const code = generateCode();
+    let code = dto.code;
+
+    if (code) {
+      const existing = await this.prisma.link.findUnique({ where: { code } });
+      if (existing) {
+        throw new ForbiddenException('Custom code sudah digunakan');
+      }
+    } else {
+      code = generateCode();
+    }
 
     return await this.prisma.link.create({
       data: {
         code,
-        originalUrl: dto.url,
+        originalUrl: dto.url.match(/^https?:\/\//i) ? dto.url : `http://${dto.url}`,
         userId,
         title: dto.title,
         description: dto.description,
@@ -46,7 +55,7 @@ export class LinksService {
   /**
    * Ambil detail link by ID — hanya jika milik user yang sedang login.
    */
-  async findById(id: number, userId: number) {
+  async findById(id: string, userId: number) {
     const link = await this.prisma.link.findUnique({
       where: { id },
       include: { stats: true },
@@ -76,7 +85,7 @@ export class LinksService {
     return link;
   }
 
-  async trackClick(linkId: number, ipAddress?: string, userAgent?: string) {
+  async trackClick(linkId: string, ipAddress?: string, userAgent?: string) {
     // Lookup country berdasarkan IP menggunakan geoip-lite
     let country: string | undefined;
     if (ipAddress) {
@@ -101,13 +110,21 @@ export class LinksService {
   /**
    * Update link — hanya jika milik user yang sedang login.
    */
-  async update(id: number, dto: UpdateLinkDto, userId: number) {
-    await this.findById(id, userId);
+  async update(id: string, dto: UpdateLinkDto, userId: number) {
+    const link = await this.findById(id, userId);
+
+    if (dto.code && dto.code !== link.code) {
+      const existing = await this.prisma.link.findUnique({ where: { code: dto.code } });
+      if (existing) {
+        throw new ForbiddenException('Custom code sudah digunakan');
+      }
+    }
 
     return await this.prisma.link.update({
       where: { id },
       data: {
-        ...(dto.originalUrl && { originalUrl: dto.originalUrl }),
+        ...(dto.code && { code: dto.code }),
+        ...(dto.url && { originalUrl: dto.url.match(/^https?:\/\//i) ? dto.url : `http://${dto.url}` }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -122,8 +139,56 @@ export class LinksService {
   /**
    * Hapus link — hanya jika milik user yang sedang login.
    */
-  async remove(id: number, userId: number) {
+  async remove(id: string, userId: number) {
     await this.findById(id, userId);
     return await this.prisma.link.delete({ where: { id } });
+  }
+
+  /**
+   * Mengambil statistik detail dari suatu link
+   */
+  async getLinkStats(id: string, userId: number) {
+    const link = await this.findById(id, userId);
+
+    const clicks = await this.prisma.clickLog.findMany({
+      where: { linkId: id },
+    });
+
+    const countryCount: Record<string, number> = {};
+    const browserCount: Record<string, number> = {};
+
+    // Use require for UAParser to avoid import issues
+    const UAParser = require('ua-parser-js');
+
+    for (const click of clicks) {
+      // Country
+      const country = click.country || 'Unknown';
+      countryCount[country] = (countryCount[country] || 0) + 1;
+
+      // Browser
+      let browserName = 'Unknown';
+      if (click.userAgent) {
+        const parser = new UAParser(click.userAgent);
+        const browser = parser.getBrowser();
+        if (browser.name) {
+          browserName = browser.name;
+        }
+      }
+      browserCount[browserName] = (browserCount[browserName] || 0) + 1;
+    }
+
+    const topCountries = Object.entries(countryCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const topBrowsers = Object.entries(browserCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      totalClicks: link.stats?.totalClicks || 0,
+      topCountries,
+      topBrowsers,
+    };
   }
 }
