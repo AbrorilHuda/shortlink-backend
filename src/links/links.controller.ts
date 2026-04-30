@@ -1,24 +1,98 @@
-import { Controller, Post, Body, Get, Param, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  Patch,
+  Delete,
+  Res,
+  Req,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { LinksService } from './links.service';
-import { type Response } from 'express';
+import { CreateLinkDto } from './dto/create-link.dto';
+import { UpdateLinkDto } from './dto/update-link.dto';
+import { successResponse } from '../common/helpers/response.helper';
+import { getClientIp } from '../common/utils/get-client-ip';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GetUser } from '../common/decorators/get-user.decorator';
+import type { UserPayload } from '../common/decorators/get-user.decorator';
+import { type Response, type Request } from 'express';
 
 @Controller()
 export class LinksController {
   constructor(private linksService: LinksService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post('links')
-  create(@Body('url') url: string) {
-    return this.linksService.create(url);
+  async create(@Body() dto: CreateLinkDto, @GetUser() user: UserPayload) {
+    const link = await this.linksService.create(dto, user.id);
+    return successResponse(link, 'Link berhasil dibuat');
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('links')
+  async findAll(@GetUser() user: UserPayload) {
+    const links = await this.linksService.findAll(user.id);
+    return successResponse(links, 'Berhasil mengambil semua link');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('links/:id')
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: UserPayload,
+  ) {
+    const link = await this.linksService.findById(id, user.id);
+    return successResponse(link, 'Berhasil mengambil link');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('links/:id')
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateLinkDto,
+    @GetUser() user: UserPayload,
+  ) {
+    const link = await this.linksService.update(id, dto, user.id);
+    return successResponse(link, 'Link berhasil diupdate');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('links/:id')
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: UserPayload,
+  ) {
+    await this.linksService.remove(id, user.id);
+    return successResponse(null, 'Link berhasil dihapus');
+  }
+
+  // Harus di bawah /links routes — public, tidak butuh auth
   @Get(':code')
-  async redirect(@Param('code') code: string, @Res() res: Response) {
-    const link = await this.linksService.findByCode(code);
+  async redirect(
+    @Param('code') code: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      const link = await this.linksService.findByCode(code);
 
-    if (!link) {
-      return res.status(404).send('Not found');
+      const ip = getClientIp(req);
+      const userAgent = req.headers['user-agent'];
+
+      // Track klik secara non-blocking (tidak menghambat redirect)
+      this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
+
+      return res.redirect(link.originalUrl);
+    } catch (err: any) {
+      return res.status(err.status ?? 404).json({
+        success: false,
+        message: err.message ?? 'Link tidak ditemukan',
+        data: null,
+      });
     }
-
-    return res.redirect(link.originalUrl);
   }
 }

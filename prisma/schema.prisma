@@ -13,15 +13,28 @@ datasource db {
 }
 
 
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+
+  links     Link[]
+}
+
 model Link {
-  id           Int   @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   code         String   @unique
   originalUrl  String
   userId       Int?
+  title        String?
+  description  String?
   createdAt    DateTime @default(now())
   expiredAt    DateTime?
   isActive     Boolean  @default(true)
 
+  user         User?    @relation(fields: [userId], references: [id])
   stats        LinkStat?
   clicks       ClickLog[]
 }
@@ -32,7 +45,7 @@ model LinkStat {
   totalClicks   Int      @default(0)
   lastClickedAt DateTime?
 
-  link          Link     @relation(fields: [linkId], references: [id])
+  link          Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
 }
 
 model ClickLog {
@@ -43,5 +56,5 @@ model ClickLog {
   country    String?
   createdAt  DateTime @default(now())
 
-  link       Link     @relation(fields: [linkId], references: [id])
+  link       Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
 }
