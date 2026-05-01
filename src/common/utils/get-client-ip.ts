@@ -23,7 +23,6 @@ export function getClientIp(req: Request): string | undefined {
 
   if (!ip) return undefined;
 
-  // Bersihkan prefix IPv6-mapped IPv4 (::ffff:192.168.1.1 → 192.168.1.1)
   if (ip.startsWith('::ffff:')) {
     ip = ip.replace('::ffff:', '');
   }

@@ -1,4 +1,4 @@
-import { IsEmail, IsString } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty } from 'class-validator';
 
 export class LoginDto {
   @IsEmail({}, { message: 'Format email tidak valid' })
@@ -6,4 +6,8 @@ export class LoginDto {
 
   @IsString()
   password: string;
+
+  @IsNotEmpty({ message: 'Validasi keamanan (Turnstile) diperlukan' })
+  @IsString()
+  cfTurnstileResponse: string;
 }

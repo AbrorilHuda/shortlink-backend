@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsNotEmpty } from 'class-validator';
 
 export class RegisterDto {
   @IsOptional()
@@ -11,4 +11,8 @@ export class RegisterDto {
   @IsString()
   @MinLength(6, { message: 'Password minimal 6 karakter' })
   password: string;
+
+  @IsNotEmpty({ message: 'Validasi keamanan (Turnstile) diperlukan' })
+  @IsString()
+  cfTurnstileResponse: string;
 }

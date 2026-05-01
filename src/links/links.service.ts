@@ -9,6 +9,7 @@ import { generateCode } from '../common/utils/generate-code';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
 import * as geoip from 'geoip-lite';
+import UAParser from 'ua-parser-js';
 
 @Injectable()
 export class LinksService {
@@ -157,8 +158,7 @@ export class LinksService {
     const countryCount: Record<string, number> = {};
     const browserCount: Record<string, number> = {};
 
-    // Use require for UAParser to avoid import issues
-    const UAParser = require('ua-parser-js');
+
 
     for (const click of clicks) {
       // Country

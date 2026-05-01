@@ -16,7 +16,36 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  private async verifyTurnstile(token: string) {
+    const secret = process.env.TURNSTILE_SECRET_KEY;
+    if (!secret) {
+      // Jika secret key tidak di-set, anggap pass untuk development, tapi idealnya throw error jika di prod
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('secret', secret);
+    formData.append('response', token);
+
+    try {
+      const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        body: formData,
+        method: 'POST',
+      });
+
+      const outcome = await result.json();
+      if (!outcome.success) {
+        throw new UnauthorizedException('Validasi keamanan Turnstile gagal');
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException('Gagal memverifikasi token keamanan');
+    }
+  }
+
   async register(dto: RegisterDto) {
+    await this.verifyTurnstile(dto.cfTurnstileResponse);
+
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -42,6 +71,8 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    await this.verifyTurnstile(dto.cfTurnstileResponse);
+
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
