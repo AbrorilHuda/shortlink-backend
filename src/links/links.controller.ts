@@ -40,10 +40,7 @@ export class LinksController {
 
   @UseGuards(JwtAuthGuard)
   @Get('links/:id')
-  async findOne(
-    @Param('id') id: string,
-    @GetUser() user: UserPayload,
-  ) {
+  async findOne(@Param('id') id: string, @GetUser() user: UserPayload) {
     const link = await this.linksService.findById(id, user.id);
     return successResponse(link, 'Berhasil mengambil link');
   }
@@ -61,20 +58,14 @@ export class LinksController {
 
   @UseGuards(JwtAuthGuard)
   @Delete('links/:id')
-  async remove(
-    @Param('id') id: string,
-    @GetUser() user: UserPayload,
-  ) {
+  async remove(@Param('id') id: string, @GetUser() user: UserPayload) {
     await this.linksService.remove(id, user.id);
     return successResponse(null, 'Link berhasil dihapus');
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('links/:id/stats')
-  async getStats(
-    @Param('id') id: string,
-    @GetUser() user: UserPayload,
-  ) {
+  async getStats(@Param('id') id: string, @GetUser() user: UserPayload) {
     const stats = await this.linksService.getLinkStats(id, user.id);
     return successResponse(stats, 'Berhasil mengambil statistik link');
   }
@@ -89,7 +80,7 @@ export class LinksController {
       const link = await this.linksService.findByCode(code);
 
       const ip = getClientIp(req);
-      const userAgent = req.headers['user-agent'];
+      const userAgent = req.get('user-agent');
 
       // Track klik secara non-blocking (tidak menghambat redirect)
       this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
@@ -115,7 +106,9 @@ export class LinksController {
           data: null,
         });
       }
-      return res.status(err.status ?? 404).send(err.message ?? 'Link tidak ditemukan');
+      return res
+        .status(err.status ?? 404)
+        .send(err.message ?? 'Link tidak ditemukan');
     }
   }
 }

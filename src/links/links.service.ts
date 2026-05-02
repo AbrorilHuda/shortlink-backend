@@ -10,7 +10,7 @@ import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
 import * as geoip from 'geoip-lite';
 import UAParser from 'ua-parser-js';
-
+import { isPrivateOrLocalIp } from '../common/utils/get-client-ip';
 @Injectable()
 export class LinksService {
   constructor(private prisma: PrismaService) {}
@@ -29,7 +29,9 @@ export class LinksService {
     return await this.prisma.link.create({
       data: {
         code,
-        originalUrl: dto.url.match(/^https?:\/\//i) ? dto.url : `http://${dto.url}`,
+        originalUrl: dto.url.match(/^https?:\/\//i)
+          ? dto.url
+          : `http://${dto.url}`,
         userId,
         title: dto.title,
         description: dto.description,
@@ -90,8 +92,11 @@ export class LinksService {
     // Lookup country berdasarkan IP menggunakan geoip-lite
     let country: string | undefined;
     if (ipAddress) {
-      const geo = geoip.lookup(ipAddress);
-      country = geo?.country ?? undefined;
+      const normalizedIp = ipAddress.trim();
+      if (!isPrivateOrLocalIp(normalizedIp)) {
+        const geo = geoip.lookup(normalizedIp);
+        country = geo?.country ?? undefined;
+      }
     }
 
     await this.prisma.clickLog.create({
@@ -115,7 +120,9 @@ export class LinksService {
     const link = await this.findById(id, userId);
 
     if (dto.code && dto.code !== link.code) {
-      const existing = await this.prisma.link.findUnique({ where: { code: dto.code } });
+      const existing = await this.prisma.link.findUnique({
+        where: { code: dto.code },
+      });
       if (existing) {
         throw new ForbiddenException('Custom code sudah digunakan');
       }
@@ -125,7 +132,11 @@ export class LinksService {
       where: { id },
       data: {
         ...(dto.code && { code: dto.code }),
-        ...(dto.url && { originalUrl: dto.url.match(/^https?:\/\//i) ? dto.url : `http://${dto.url}` }),
+        ...(dto.url && {
+          originalUrl: dto.url.match(/^https?:\/\//i)
+            ? dto.url
+            : `http://${dto.url}`,
+        }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -157,8 +168,6 @@ export class LinksService {
 
     const countryCount: Record<string, number> = {};
     const browserCount: Record<string, number> = {};
-
-
 
     for (const click of clicks) {
       // Country
