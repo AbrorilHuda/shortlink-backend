@@ -79,13 +79,19 @@ export class LinksController {
     try {
       const link = await this.linksService.findByCode(code);
 
-      const ip = getClientIp(req);
-      const userAgent = req.get('user-agent');
+      const wantsJson = req.headers.accept?.includes('application/json');
+      const shouldTrack = !wantsJson || req.headers['x-track-click'] === 'true';
 
-      // Track klik secara non-blocking (tidak menghambat redirect)
-      this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
+      if (shouldTrack) {
+        const ip = getClientIp(req);
+        const userAgent = req.get('user-agent');
 
-      if (req.headers.accept?.includes('application/json')) {
+        // Track klik secara non-blocking (tidak menghambat redirect)
+        this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
+      }
+
+      // Untuk kebutuhan FE (metadata/preview) kembalikan JSON
+      if (wantsJson) {
         return res.json({
           success: true,
           message: 'Redirect info',
