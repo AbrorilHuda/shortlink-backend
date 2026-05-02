@@ -79,7 +79,6 @@ export class LinksController {
     return successResponse(stats, 'Berhasil mengambil statistik link');
   }
 
-  // Harus di bawah /links routes — public, tidak butuh auth
   @Get(':code')
   async redirect(
     @Param('code') code: string,
@@ -95,13 +94,28 @@ export class LinksController {
       // Track klik secara non-blocking (tidak menghambat redirect)
       this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
 
+      if (req.headers.accept?.includes('application/json')) {
+        return res.json({
+          success: true,
+          message: 'Redirect info',
+          data: {
+            originalUrl: link.originalUrl,
+            title: link.title,
+            description: link.description,
+          },
+        });
+      }
+
       return res.redirect(link.originalUrl);
     } catch (err: any) {
-      return res.status(err.status ?? 404).json({
-        success: false,
-        message: err.message ?? 'Link tidak ditemukan',
-        data: null,
-      });
+      if (req.headers.accept?.includes('application/json')) {
+        return res.status(err.status ?? 404).json({
+          success: false,
+          message: err.message ?? 'Link tidak ditemukan',
+          data: null,
+        });
+      }
+      return res.status(err.status ?? 404).send(err.message ?? 'Link tidak ditemukan');
     }
   }
 }
