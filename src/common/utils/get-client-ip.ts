@@ -30,13 +30,16 @@ export function isPrivateOrLocalIp(ip: string): boolean {
 
 export function getClientIp(req: Request): string | undefined {
   // Prioritas header yang umum dipakai oleh reverse proxy / CDN
+  const uniraClientIp = req.headers['x-unira-client-ip'];
   const cfConnectingIp = req.headers['cf-connecting-ip'];
   const xRealIp = req.headers['x-real-ip'];
   const forwarded = req.headers['x-forwarded-for'];
 
   let ip: string | undefined;
 
-  if (cfConnectingIp) {
+  if (uniraClientIp) {
+    ip = Array.isArray(uniraClientIp) ? uniraClientIp[0] : uniraClientIp;
+  } else if (cfConnectingIp) {
     ip = Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
   } else if (xRealIp) {
     ip = Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
