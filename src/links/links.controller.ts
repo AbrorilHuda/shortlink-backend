@@ -9,16 +9,37 @@ import {
   Res,
   Req,
   UseGuards,
+  ForbiddenException,
+  HttpException,
 } from '@nestjs/common';
 import { LinksService } from './links.service';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
+import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { successResponse } from '../common/helpers/response.helper';
 import { getClientIp } from '../common/utils/get-client-ip';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import type { UserPayload } from '../common/decorators/get-user.decorator';
 import { type Response, type Request } from 'express';
+
+function getHttpExceptionMessage(exception: HttpException): string {
+  const response = exception.getResponse();
+  if (typeof response === 'string') return response;
+
+  if (response && typeof response === 'object') {
+    const maybeMessage = (response as Record<string, unknown>).message;
+    if (typeof maybeMessage === 'string') return maybeMessage;
+    if (
+      Array.isArray(maybeMessage) &&
+      maybeMessage.every((item) => typeof item === 'string')
+    ) {
+      return maybeMessage.join(', ');
+    }
+  }
+
+  return exception.message;
+}
 
 @Controller()
 export class LinksController {
@@ -70,6 +91,21 @@ export class LinksController {
     return successResponse(stats, 'Berhasil mengambil statistik link');
   }
 
+  @Post(':code/verify-password')
+  async verifyPassword(
+    @Param('code') code: string,
+    @Body() dto: VerifyPasswordDto,
+    @Req() req: Request,
+  ) {
+    const result = await this.linksService.verifyPassword(code, dto.password);
+    const ip = getClientIp(req);
+    const userAgent = req.get('user-agent');
+    const link = await this.linksService.findByCode(code);
+    this.linksService.trackClick(link.id, ip, userAgent).catch(() => {});
+
+    return successResponse(result, 'Password benar');
+  }
+
   @Get(':code')
   async redirect(
     @Param('code') code: string,
@@ -82,7 +118,13 @@ export class LinksController {
       const wantsJson = req.headers.accept?.includes('application/json');
       const shouldTrack = !wantsJson || req.headers['x-track-click'] === 'true';
 
-      if (shouldTrack) {
+      const isProtected = !!link.password;
+
+      if (isProtected && !wantsJson) {
+        throw new ForbiddenException('Link ini dilindungi password');
+      }
+
+      if (shouldTrack && !isProtected) {
         const ip = getClientIp(req);
         const userAgent = req.get('user-agent');
 
@@ -94,27 +136,36 @@ export class LinksController {
       if (wantsJson) {
         return res.json({
           success: true,
-          message: 'Redirect info',
+          message: isProtected ? 'Link dilindungi password' : 'Redirect info',
           data: {
-            originalUrl: link.originalUrl,
+            originalUrl: isProtected ? null : link.originalUrl,
             title: link.title,
             description: link.description,
+            isProtected,
           },
         });
       }
 
       return res.redirect(link.originalUrl);
-    } catch (err: any) {
-      if (req.headers.accept?.includes('application/json')) {
-        return res.status(err.status ?? 404).json({
+    } catch (err: unknown) {
+      const wantsJson = req.headers.accept?.includes('application/json');
+      const status = err instanceof HttpException ? err.getStatus() : 404;
+      const message =
+        err instanceof HttpException
+          ? getHttpExceptionMessage(err)
+          : err instanceof Error
+            ? err.message
+            : 'Link tidak ditemukan';
+
+      if (wantsJson) {
+        return res.status(status).json({
           success: false,
-          message: err.message ?? 'Link tidak ditemukan',
+          message,
           data: null,
         });
       }
-      return res
-        .status(err.status ?? 404)
-        .send(err.message ?? 'Link tidak ditemukan');
+
+      return res.status(status).send(message);
     }
   }
 }

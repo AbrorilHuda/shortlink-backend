@@ -5,6 +5,14 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
+import type { StringValue } from 'ms';
+
+function getJwtExpiresIn(): StringValue | number {
+  const raw = process.env.JWT_EXPIRES_IN;
+  if (!raw) return '7d';
+  if (/^\d+$/.test(raw)) return Number(raw);
+  return raw as StringValue;
+}
 
 @Module({
   imports: [
@@ -12,7 +20,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'default_secret',
-      signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as any },
+      signOptions: { expiresIn: getJwtExpiresIn() },
     }),
   ],
   controllers: [AuthController],

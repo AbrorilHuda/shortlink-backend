@@ -9,6 +9,21 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 
+type TurnstileVerifyResponse = {
+  success: boolean;
+};
+
+function isTurnstileVerifyResponse(
+  value: unknown,
+): value is TurnstileVerifyResponse {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'success' in value &&
+    typeof (value as Record<string, unknown>).success === 'boolean'
+  );
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -28,13 +43,16 @@ export class AuthService {
     formData.append('response', token);
 
     try {
-      const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-        body: formData,
-        method: 'POST',
-      });
+      const result = await fetch(
+        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        {
+          body: formData,
+          method: 'POST',
+        },
+      );
 
-      const outcome = await result.json();
-      if (!outcome.success) {
+      const outcome: unknown = await result.json();
+      if (!isTurnstileVerifyResponse(outcome) || !outcome.success) {
         throw new UnauthorizedException('Validasi keamanan Turnstile gagal');
       }
     } catch (error) {

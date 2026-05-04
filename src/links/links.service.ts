@@ -11,10 +11,38 @@ import { UpdateLinkDto } from './dto/update-link.dto';
 import * as geoip from 'geoip-lite';
 import UAParser from 'ua-parser-js';
 import { isPrivateOrLocalIp } from '../common/utils/get-client-ip';
+import * as bcrypt from 'bcrypt';
+
+type WithOptionalPassword = { password: string | null };
+
+function toPublicLink<T extends WithOptionalPassword>(
+  link: T,
+): Omit<T, 'password'> & { isProtected: boolean } {
+  const { password, ...rest } = link;
+  return {
+    ...rest,
+    isProtected: !!password,
+  };
+}
+
 @Injectable()
 export class LinksService {
   constructor(private prisma: PrismaService) {}
   async create(dto: CreateLinkDto, userId: number) {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const linkCount = await this.prisma.link.count({
+      where: {
+        userId,
+        createdAt: { gte: twentyFourHoursAgo },
+      },
+    });
+
+    if (linkCount >= 5) {
+      throw new ForbiddenException(
+        'Batas pembuatan link harian (5) telah tercapai',
+      );
+    }
+
     let code = dto.code;
 
     if (code) {
@@ -26,7 +54,12 @@ export class LinksService {
       code = generateCode();
     }
 
-    return await this.prisma.link.create({
+    let hashedPassword: string | null = null;
+    if (dto.password) {
+      hashedPassword = await bcrypt.hash(dto.password, 10);
+    }
+
+    const newLink = await this.prisma.link.create({
       data: {
         code,
         originalUrl: dto.url.match(/^https?:\/\//i)
@@ -35,6 +68,7 @@ export class LinksService {
         userId,
         title: dto.title,
         description: dto.description,
+        password: hashedPassword,
         expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : null,
         stats: {
           create: { totalClicks: 0 },
@@ -42,17 +76,20 @@ export class LinksService {
       },
       include: { stats: true },
     });
+
+    return toPublicLink(newLink);
   }
 
   /**
    * Mengambil semua link milik user tertentu.
    */
   async findAll(userId: number) {
-    return await this.prisma.link.findMany({
+    const links = await this.prisma.link.findMany({
       where: { userId },
       include: { stats: true },
       orderBy: { createdAt: 'desc' },
     });
+    return links.map(toPublicLink);
   }
 
   /**
@@ -68,7 +105,7 @@ export class LinksService {
     if (link.userId !== userId)
       throw new ForbiddenException('Akses ditolak: bukan milik kamu');
 
-    return link;
+    return toPublicLink(link);
   }
 
   /**
@@ -128,7 +165,12 @@ export class LinksService {
       }
     }
 
-    return await this.prisma.link.update({
+    let hashedPassword: string | undefined = undefined;
+    if (dto.password) {
+      hashedPassword = await bcrypt.hash(dto.password, 10);
+    }
+
+    const updatedLink = await this.prisma.link.update({
       where: { id },
       data: {
         ...(dto.code && { code: dto.code }),
@@ -140,12 +182,15 @@ export class LinksService {
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.description !== undefined && { description: dto.description }),
+        ...(hashedPassword !== undefined && { password: hashedPassword }),
         ...(dto.expiredAt !== undefined && {
           expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : null,
         }),
       },
       include: { stats: true },
     });
+
+    return toPublicLink(updatedLink);
   }
 
   /**
@@ -199,5 +244,26 @@ export class LinksService {
       topCountries,
       topBrowsers,
     };
+  }
+
+  async verifyPassword(code: string, passwordInput: string) {
+    const link = await this.prisma.link.findUnique({ where: { code } });
+
+    if (!link) throw new NotFoundException('Link tidak ditemukan');
+    if (!link.isActive) throw new NotFoundException('Link tidak aktif');
+    if (link.expiredAt && link.expiredAt < new Date()) {
+      throw new GoneException('Link sudah expired');
+    }
+
+    if (!link.password) {
+      return { originalUrl: link.originalUrl };
+    }
+
+    const isMatch = await bcrypt.compare(passwordInput, link.password);
+    if (!isMatch) {
+      throw new ForbiddenException('Password salah');
+    }
+
+    return { originalUrl: link.originalUrl };
   }
 }

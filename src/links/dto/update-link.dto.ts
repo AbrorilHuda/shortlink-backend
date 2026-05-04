@@ -10,7 +10,9 @@ import {
 export class UpdateLinkDto {
   @IsOptional()
   @IsString({ message: 'Code harus berupa string' })
-  @Matches(/^[a-zA-Z0-9-_]+$/, { message: 'Code hanya boleh berisi huruf, angka, strip, dan underscore' })
+  @Matches(/^[a-zA-Z0-9-_]+$/, {
+    message: 'Code hanya boleh berisi huruf, angka, strip, dan underscore',
+  })
   code?: string;
 
   @IsOptional()
@@ -32,4 +34,8 @@ export class UpdateLinkDto {
   @IsOptional()
   @IsDateString({}, { message: 'Format tanggal tidak valid' })
   expiredAt?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Password harus berupa string' })
+  password?: string;
 }
